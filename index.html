@@ -1,0 +1,213 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="flex h-screen w-full">
+    <!-- Sidebar -->
+    <div class="w-72 bg-gray-50 border-r border-gray-200 flex flex-col">
+        <div class="p-4 border-b">
+            <button onclick="newChat()" 
+                    class="w-full bg-black text-white py-3 px-4 rounded-xl flex items-center justify-center gap-2 hover:bg-gray-800 transition">
+                <i class="fas fa-plus"></i> New Chat
+            </button>
+        </div>
+        
+        <!-- Search -->
+        <div class="p-4">
+            <div class="relative">
+                <input id="searchInput" type="text" placeholder="Search chats..." 
+                       onkeyup="searchChats()" 
+                       class="w-full pl-10 py-2 border border-gray-300 rounded-xl focus:outline-none focus:border-black">
+                <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
+            </div>
+        </div>
+
+        <!-- History -->
+        <div class="flex-1 overflow-y-auto px-3" id="historyList">
+            <!-- Populated by JS -->
+        </div>
+
+        <div class="p-4 border-t text-xs text-gray-500">
+            Secure • Private • Company Use Only
+        </div>
+    </div>
+
+    <!-- Main Chat Area -->
+    <div class="flex-1 flex flex-col">
+        <div class="border-b p-4 flex items-center justify-between bg-white">
+            <h1 id="chatTitle" class="font-semibold text-xl">No Cap Ai</h1>
+            <div class="flex items-center gap-4 text-sm text-gray-500">
+                <span id="modelInfo">No Cap Ai</span>
+            </div>
+        </div>
+
+        <!-- Messages -->
+        <div id="messages" class="flex-1 overflow-y-auto p-6 space-y-8 chat-container bg-white">
+            <!-- Messages injected by JS -->
+        </div>
+
+        <!-- Input -->
+        <div class="p-6 border-t bg-white">
+            <div class="max-w-3xl mx-auto">
+                <form id="messageForm" class="flex gap-3">
+                    <textarea id="userInput" rows="1" 
+                              class="flex-1 resize-y max-h-52 border border-gray-300 rounded-3xl px-6 py-4 focus:outline-none focus:border-black"
+                              placeholder="Ask anything..."></textarea>
+                    <button type="submit"
+                            class="bg-black text-white w-12 h-12 rounded-2xl flex items-center justify-center hover:bg-gray-800 transition">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Voice Input Button -->
+    <button id="voiceBtn" 
+            class="fixed bottom-28 right-6 bg-black hover:bg-gray-800 text-white w-14 h-14 rounded-full flex items-center justify-center shadow-xl z-50 text-2xl">
+        🎤
+    </button>
+</div>
+
+<script>
+let currentChatId = null;
+
+function renderHistory(chats) {
+    const container = document.getElementById('historyList');
+    container.innerHTML = chats.map(chat => `
+        <div class="px-4 py-3 hover:bg-gray-100 rounded-xl cursor-pointer mb-1 flex justify-between items-center group">
+            <div onclick="loadChat(${chat.id})" class="truncate flex-1">${chat.title}</div>
+            <button onclick="deleteChat(${chat.id}); event.stopImmediatePropagation()" 
+                    class="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700 px-2">
+                🗑
+            </button>
+        </div>
+    `).join('');
+}
+
+async function deleteChat(chatId) {
+    if (confirm("Kya aap is chat ko delete karna chahte hain?")) {
+        await fetch(`/chat/${chatId}/delete`, { method: 'POST' });
+        loadChats();
+        if (currentChatId === chatId) {
+            document.getElementById('messages').innerHTML = '';
+            currentChatId = null;
+        }
+    }
+}
+
+async function loadChats() {
+    const res = await fetch('/history');
+    const chats = await res.json();
+    renderHistory(chats);
+}
+
+async function newChat() {
+    const res = await fetch('/new_chat', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({title: 'New Chat'})
+    });
+    const data = await res.json();
+    currentChatId = data.chat_id;
+    document.getElementById('chatTitle').textContent = data.title;
+    document.getElementById('messages').innerHTML = '';
+    loadChats();
+}
+
+async function loadChat(id) {
+    currentChatId = id;
+    const res = await fetch(`/chat/${id}`);
+    const data = await res.json();
+    document.getElementById('chatTitle').textContent = data.title;
+    
+    const msgContainer = document.getElementById('messages');
+    msgContainer.innerHTML = data.messages.map(m => `
+        <div class="flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}">
+            <div class="${m.role === 'user' ? 'bg-black text-white' : 'bg-gray-100'} max-w-[80%] rounded-3xl px-6 py-4">
+                ${m.content}
+            </div>
+        </div>
+    `).join('');
+}
+
+async function searchChats() {
+    const query = document.getElementById('searchInput').value.trim();
+    if (!query) {
+        loadChats();
+        return;
+    }
+    const res = await fetch('/search', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({query})
+    });
+    const chats = await res.json();
+    renderHistory(chats);
+}
+
+// Send message
+document.getElementById('messageForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const input = document.getElementById('userInput');
+    const message = input.value.trim();
+    if (!message || !currentChatId) return;
+
+    const msgContainer = document.getElementById('messages');
+    msgContainer.innerHTML += `
+        <div class="flex justify-end">
+            <div class="bg-black text-white max-w-[80%] rounded-3xl px-6 py-4">${message}</div>
+        </div>
+    `;
+    msgContainer.scrollTop = msgContainer.scrollHeight;
+
+    const tempMsg = message;
+    input.value = '';
+
+    const res = await fetch(`/chat/${currentChatId}/message`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({message: tempMsg})
+    });
+    const data = await res.json();
+
+    msgContainer.innerHTML += `
+        <div class="flex justify-start">
+            <div class="bg-gray-100 max-w-[80%] rounded-3xl px-6 py-4">${data.reply}</div>
+        </div>
+    `;
+    msgContainer.scrollTop = msgContainer.scrollHeight;
+});
+
+// Voice Input
+const voiceBtn = document.getElementById('voiceBtn');
+let recognition = null;
+
+if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.lang = 'en-US';
+
+    recognition.onresult = function(event) {
+        document.getElementById('userInput').value = event.results[0][0].transcript;
+        voiceBtn.style.backgroundColor = 'black';
+    };
+
+    recognition.onerror = () => voiceBtn.style.backgroundColor = 'black';
+}
+
+voiceBtn.addEventListener('click', () => {
+    if (recognition) {
+        voiceBtn.style.backgroundColor = '#ef4444';
+        recognition.start();
+    } else {
+        alert("Browser voice support nahi karta.");
+    }
+});
+
+// Init
+window.onload = () => {
+    loadChats();
+    if (!currentChatId) newChat();
+};
+</script>
+{% endblock %}

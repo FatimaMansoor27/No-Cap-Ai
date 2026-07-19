@@ -1,2 +1,15 @@
-# No-Cap-Ai
-Intelligent AI Chatbot with persistent memory, voice input, and professional UI. Powered by Groq LLM.
+# Company Grok Chatbot
+
+Secure, private ChatGPT-like interface using xAI Grok API.
+
+## Features
+- White clean modern theme
+- Persistent chat history (SQLite)
+- Left sidebar: New Chat, History, Search
+- Responsive (mobile-friendly)
+- Memory across sessions
+
+## Setup
+1. `pip install -r requirements.txt`
+2. Add XAI_API_KEY to .env
+3. `python app.py`
