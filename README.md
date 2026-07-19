@@ -1,4 +1,4 @@
-# Company Grok Chatbot
+# No Cap Ai
 
 Secure, private ChatGPT-like interface using xAI Grok API.
 
